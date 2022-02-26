@@ -34,7 +34,7 @@ if ($file['size'] >= $maxsize) {
 $move = move_uploaded_file($file['tmp_name'], $folder . '/' . $targetName . '.' . $ext);
 
 if ($move) {
-    response(['status' => 'success', 'message' => 'Uploaded successfully.']);
+    response(['status' => 'success', 'file' => $targetName . '.' . $ext, 'message' => 'Uploaded successfully.']);
 } else {
     response(['status' => 'failed', 'message' => 'There is an issue']);
 }
