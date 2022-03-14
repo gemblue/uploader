@@ -12,7 +12,7 @@ include('helper.php');
  */
 $allowed = ['pdf'];
 $folder = 'files';
-$maxsize = 2500;
+$maxsize = 25000;
 
 // Is there a file?
 if (!isset($_FILES['file']['name'])) {
