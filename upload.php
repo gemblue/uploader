@@ -10,9 +10,9 @@ include('helper.php');
 /**
  * Config
  */
-$allowed = ['jpg', 'png', 'jpeg', 'pdf', 'zip'];
+$allowed = ['pdf'];
 $folder = 'files';
-$maxsize = 300000;
+$maxsize = 2500;
 
 // Is there a file?
 if (!isset($_FILES['file']['name'])) {
