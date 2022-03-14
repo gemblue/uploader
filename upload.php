@@ -16,7 +16,7 @@ $maxsize = 2500;
 
 // Is there a file?
 if (!isset($_FILES['file']['name'])) {
-    response(['status' => 'failed', 'message' => 'Need file to upload.']);
+    response(['status' => 'failed', 'message' => 'Butuh file untuk diunggah.']);
 }
 
 $file = $_FILES['file'];
@@ -26,11 +26,11 @@ $ext = strtolower(end($explode));
 
 // Check.
 if (!in_array($ext, $allowed)) {
-    response(['status' => 'failed', 'message' => 'Extension is not allowed']);
+    response(['status' => 'failed', 'message' => 'Hanya menerima ekstensi PDF']);
 }
 
 if ($file['size'] >= $maxsize) {
-    response(['status' => 'failed', 'message' => 'File size is too large.']);
+    response(['status' => 'failed', 'message' => 'Ukuran file terlalu besar, kompres dan coba lagi']);
 }
 
 // Do upload.
