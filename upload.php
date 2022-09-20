@@ -11,7 +11,13 @@ include('helper.php');
  * Config
  */
 $allowed = ['pdf'];
-$folder = 'files';
+
+if ($_GET['folder'] == 'penilaian') {
+    $folder = 'files/penilaian';
+} else {
+    $folder = 'files';
+}
+
 $maxsize = 6097152;
 
 // Is there a file?
