@@ -12,8 +12,12 @@ include('helper.php');
  */
 $allowed = ['pdf'];
 
-if ($_GET['folder'] == 'penilaian') {
-    $folder = 'files/penilaian';
+if (isset($_GET['folder'])) { 
+    if ($_GET['folder'] == 'penilaian') {
+        $folder = 'files/penilaian';
+    }
+    
+    $folder = 'files';
 } else {
     $folder = 'files';
 }
