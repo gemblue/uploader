@@ -1,4 +1,8 @@
 <?php
+/**
+ * Endpoint untuk menerima file upload.
+ * DEPRECATED: Hanya untuk backward compatibility, tidak disarankan untuk produksi tanpa modifikasi keamanan tambahan.
+ */
 
 header('Access-Control-Allow-Origin: *');
 
