@@ -9,10 +9,15 @@
  * - app_keys     : Daftar app key yang diizinkan beserta konfigurasinya.
  *
  * Konfigurasi per app key:
- *   - name           : Nama aplikasi (untuk keperluan logging/identifikasi)
- *   - allowed_types  : Ekstensi file yang diperbolehkan
- *   - max_size       : Batas maksimum ukuran file (bytes)
- *   - upload_dir     : Direktori tujuan akhir penyimpanan file
+ *   - name            : Nama aplikasi (untuk keperluan logging/identifikasi)
+ *   - allowed_types   : Ekstensi file yang diperbolehkan
+ *   - max_size        : Batas maksimum ukuran file (bytes)
+ *   - upload_dir      : Direktori tujuan akhir penyimpanan file
+ *   - allowed_origins : Daftar origin (scheme+host) yang boleh menggunakan app key ini.
+ *                       null atau ['*'] = izinkan semua (untuk development / server-to-server).
+ *                       Request tanpa header Origin (misal: cURL, SDK) selalu diizinkan.
+ *   - rate_limit      : Batasi jumlah permintaan token per IP dalam jangka waktu tertentu.
+ *                       max_requests = maks token, window = jendela waktu (detik).
  */
 
 return [
@@ -26,24 +31,14 @@ return [
     'app_keys' => [
 
         'APP_KEY_CONTOH_1' => [
-            'name'          => 'Aplikasi Pertama',
-            'allowed_types' => ['pdf', 'jpg', 'jpeg', 'png'],
-            'max_size'      => 10 * 1024 * 1024, // 10 MB
-            'upload_dir'    => 'files/umum',
-        ],
-
-        'APP_KEY_CONTOH_2' => [
-            'name'          => 'Aplikasi Dokumen',
-            'allowed_types' => ['pdf', 'zip', 'xls', 'xlsx', 'doc', 'docx'],
-            'max_size'      => 50 * 1024 * 1024, // 50 MB
-            'upload_dir'    => 'files/dokumen',
-        ],
-
-        'APP_KEY_PENILAIAN' => [
-            'name'          => 'Aplikasi Penilaian',
-            'allowed_types' => ['pdf'],
-            'max_size'      => 6 * 1024 * 1024, // 6 MB
-            'upload_dir'    => 'files/penilaian',
+            'name'            => 'Aplikasi Pertama',
+            'allowed_types'   => ['pdf', 'jpg', 'jpeg', 'png'],
+            'max_size'        => 10 * 1024 * 1024, // 10 MB
+            'upload_dir'      => '/var/www/html/test',
+            
+            // Ganti dengan domain produksi Anda, misal: ['https://aplikasi-saya.com']
+            'allowed_origins' => ['https://uploader.test'], // null = izinkan semua (untuk development)
+            'rate_limit'      => ['max_requests' => 20, 'window' => 60],
         ],
 
     ],

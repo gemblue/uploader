@@ -144,6 +144,126 @@ function claimToken(string $jti): bool
     return $found;
 }
 
+// ── Origin Validation & CORS ─────────────────────────────────────────
+
+/**
+ * Ambil origin dari request (Header Origin, fallback ke Referer).
+ * Browser selalu mengirim Origin untuk cross-origin request.
+ * Request server-to-server (cURL, SDK) umumnya tidak mengirim Origin.
+ */
+function getRequestOrigin(): ?string
+{
+    if (!empty($_SERVER['HTTP_ORIGIN'])) {
+        return rtrim($_SERVER['HTTP_ORIGIN'], '/');
+    }
+
+    if (!empty($_SERVER['HTTP_REFERER'])) {
+        $parts = parse_url($_SERVER['HTTP_REFERER']);
+        if ($parts && isset($parts['scheme'], $parts['host'])) {
+            $origin = $parts['scheme'] . '://' . $parts['host'];
+            if (isset($parts['port'])) $origin .= ':' . $parts['port'];
+            return $origin;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Validasi apakah origin request diizinkan oleh konfigurasi app key.
+ *
+ * Aturan:
+ *  - null atau ['*']   → izinkan semua
+ *  - origin tidak ada  → request server-to-server → izinkan
+ *  - origin ada        → harus cocok dengan salah satu entry di allowed_origins
+ */
+function validateOrigin(array $appConfig): bool
+{
+    $allowedOrigins = $appConfig['allowed_origins'] ?? null;
+
+    if ($allowedOrigins === null || $allowedOrigins === ['*']) {
+        return true;
+    }
+
+    $origin = getRequestOrigin();
+
+    // Tanpa Origin = kemungkinan server-to-server (cURL, SDK) → izinkan
+    if ($origin === null) {
+        return true;
+    }
+
+    return in_array($origin, $allowedOrigins, true);
+}
+
+/**
+ * Set header CORS sesuai allowed_origins app key.
+ * Harus dipanggil setelah app key dan origin divalidasi.
+ */
+function setCorsHeaders(array $appConfig): void
+{
+    $allowedOrigins = $appConfig['allowed_origins'] ?? null;
+
+    if ($allowedOrigins === null || $allowedOrigins === ['*']) {
+        header('Access-Control-Allow-Origin: *');
+        return;
+    }
+
+    $origin = getRequestOrigin();
+    if ($origin && in_array($origin, $allowedOrigins, true)) {
+        header('Access-Control-Allow-Origin: ' . $origin);
+        header('Vary: Origin');
+    }
+    // Origin tidak terdaftar → tidak set header CORS → browser akan blokir
+}
+
+// ── Rate Limiting ─────────────────────────────────────────────────────
+
+/**
+ * Cek apakah IP masih di bawah batas rate limit untuk app key tertentu.
+ * Menggunakan sliding window berbasis file JSON per kombinasi appKey+IP.
+ *
+ * @param  string $appKey     App key yang digunakan
+ * @param  array  $cfg        ['max_requests' => int, 'window' => int (detik)]
+ * @return bool   true = masih boleh, false = limit tercapai
+ */
+function checkRateLimit(string $appKey, array $cfg): bool
+{
+    $ip  = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $dir = __DIR__ . '/storage/rate_limits';
+
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+
+    $file   = $dir . '/' . md5($appKey . '|' . $ip) . '.json';
+    $now    = time();
+    $window = (int) $cfg['window'];
+    $maxReq = (int) $cfg['max_requests'];
+
+    $fp = fopen($file, 'c+');
+    if (!$fp) return true; // gagal buka file → izinkan (jangan blokir karena error I/O)
+
+    flock($fp, LOCK_EX);
+    $timestamps = json_decode(stream_get_contents($fp), true) ?? [];
+
+    // Buang timestamp di luar window
+    $timestamps = array_values(array_filter($timestamps, fn($t) => ($now - $t) < $window));
+
+    $allowed = count($timestamps) < $maxReq;
+
+    if ($allowed) {
+        $timestamps[] = $now;
+    }
+
+    rewind($fp);
+    ftruncate($fp, 0);
+    fwrite($fp, json_encode($timestamps));
+    flock($fp, LOCK_UN);
+    fclose($fp);
+
+    return $allowed;
+}
+
 /**
  * Human-readable PHP upload error messages.
  */

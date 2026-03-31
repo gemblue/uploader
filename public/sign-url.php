@@ -34,12 +34,22 @@
  * }
  */
 
-header('Access-Control-Allow-Origin: *');
+// CORS preflight — headers spesifik di-set setelah app key divalidasi
+// Untuk OPTIONS, kita echo back Origin agar browser tidak langsung blokir
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, X-App-Key');
 
-// Handle preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    // Pada preflight, origin belum bisa divalidasi (app key bisa jadi ada di POST body).
+    // Echo back origin agar browser lanjut ke request sesungguhnya;
+    // validasi origin yang ketat dilakukan saat POST.
+    $preflightOrigin = $_SERVER['HTTP_ORIGIN'] ?? null;
+    if ($preflightOrigin) {
+        header('Access-Control-Allow-Origin: ' . $preflightOrigin);
+        header('Vary: Origin');
+    } else {
+        header('Access-Control-Allow-Origin: *');
+    }
     http_response_code(204);
     exit;
 }
@@ -68,7 +78,33 @@ if (!isset($config['app_keys'][$appKey])) {
 $appConfig = $config['app_keys'][$appKey];
 
 // ------------------------------------------------------------------
-// 2. Tentukan konfigurasi token (dengan override opsional)
+// 2. Validasi Origin & set CORS headers
+// ------------------------------------------------------------------
+if (!validateOrigin($appConfig)) {
+    response([
+        'status'  => 'failed',
+        'message' => 'Origin tidak diizinkan untuk App Key ini.',
+    ], 403);
+}
+
+// Set header CORS yang sesuai (hanya untuk origin yang terdaftar)
+setCorsHeaders($appConfig);
+
+// ------------------------------------------------------------------
+// 3. Rate Limiting
+// ------------------------------------------------------------------
+if (
+    !empty($appConfig['rate_limit']) &&
+    !checkRateLimit($appKey, $appConfig['rate_limit'])
+) {
+    response([
+        'status'  => 'failed',
+        'message' => 'Terlalu banyak permintaan. Coba lagi setelah beberapa saat.',
+    ], 429);
+}
+
+// ------------------------------------------------------------------
+// 4. Tentukan konfigurasi token (dengan override opsional)
 // ------------------------------------------------------------------
 
 // Folder: pastikan masih di dalam upload_dir yang diizinkan app key
@@ -108,7 +144,7 @@ if (isset($_POST['allowed_types'])) {
 }
 
 // ------------------------------------------------------------------
-// 3. Buat token
+// 5. Buat token
 // ------------------------------------------------------------------
 $payload = [
     'app'             => $appKey,
@@ -127,7 +163,7 @@ $token = generateUploadToken($payload, $config['sign_secret']);
 registerToken($payload['jti'], $payload['exp']);
 
 // ------------------------------------------------------------------
-// 4. Bangun upload URL
+// 6. Bangun upload URL
 // ------------------------------------------------------------------
 $scheme    = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
 $host      = $_SERVER['HTTP_HOST'];
@@ -135,7 +171,7 @@ $basePath  = rtrim(dirname($_SERVER['REQUEST_URI']), '/');
 $uploadUrl = $scheme . '://' . $host . $basePath . '/upload.php';
 
 // ------------------------------------------------------------------
-// 5. Respons
+// 7. Respons
 // ------------------------------------------------------------------
 response([
     'status'     => 'success',

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contoh Integrasi — Uploader.js</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f1f5f9; color: #1e293b; padding: 2rem 1rem; }
+    .container { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: .25rem; }
+    .subtitle { font-size: .875rem; color: #64748b; margin-bottom: 2rem; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: .25rem; }
+    .card .desc { font-size: .82rem; color: #64748b; margin-bottom: 1.25rem; line-height: 1.5; }
+    .arch { background: #0f172a; color: #94a3b8; border-radius: 8px; padding: 1rem 1.25rem; font-family: monospace; font-size: .8rem; line-height: 1.8; margin-bottom: 1.25rem; white-space: pre; overflow-x: auto; }
+    .arch .hi { color: #4ade80; } .arch .dim { color: #475569; } .arch .warn { color: #fbbf24; }
+    .alert { border-radius: 8px; padding: .75rem 1rem; font-size: .82rem; margin-bottom: 1rem; line-height: 1.5; }
+    .alert-green  { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .alert-yellow { background: #fefce8; border: 1px solid #fde68a; color: #854d0e; }
+    label { display: block; font-size: .78rem; font-weight: 600; color: #475569; margin-bottom: .3rem; }
+    input[type=file], input[type=text] { width: 100%; padding: .45rem .75rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: .875rem; background: #f8fafc; outline: none; }
+    input:focus { border-color: #6366f1; background: #fff; }
+    button { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem 1.2rem; border: none; border-radius: 8px; font-size: .875rem; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: #6366f1; color: #fff; } .btn-primary:hover:not(:disabled) { background: #4f46e5; }
+    .btn-green   { background: #16a34a; color: #fff; } .btn-green:hover:not(:disabled)   { background: #15803d; }
+    .btn-slate   { background: #475569; color: #fff; } .btn-slate:hover:not(:disabled)   { background: #334155; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width:540px) { .row { grid-template-columns: 1fr; } }
+    .form-group { margin-bottom: .9rem; }
+    .actions { display: flex; gap: .5rem; align-items: center; margin-top: .25rem; }
+    progress { width: 100%; height: 7px; margin-top: .6rem; border-radius: 4px; appearance: none; }
+    progress::-webkit-progress-bar { background: #e2e8f0; border-radius: 4px; }
+    progress::-webkit-progress-value { background: #16a34a; border-radius: 4px; }
+    .status { font-size: .8rem; color: #64748b; margin-left: .25rem; }
+    .log { background: #0f172a; color: #94a3b8; border-radius: 8px; padding: .9rem 1rem; font-family: monospace; font-size: .78rem; min-height: 80px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-top: .75rem; }
+    .ok { color: #4ade80; } .err { color: #f87171; } .info { color: #60a5fa; }
+    code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 1px 5px; font-size: .82em; font-family: monospace; }
+    pre.snippet { background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 1rem 1.25rem; font-size: .78rem; overflow-x: auto; line-height: 1.7; margin-bottom: 1rem; }
+    .tag-prod { display: inline-block; background: #dcfce7; color: #166534; border-radius: 6px; font-size: .7rem; font-weight: 700; padding: 2px 8px; margin-left: .4rem; }
+    .tag-dev  { display: inline-block; background: #fef9c3; color: #854d0e; border-radius: 6px; font-size: .7rem; font-weight: 700; padding: 2px 8px; margin-left: .4rem; }
+    hr { border: none; border-top: 1px solid #e2e8f0; margin: 1.25rem 0; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <h1>⬆ Contoh Integrasi — Uploader.js</h1>
+  <p class="subtitle">Dua pendekatan integrasi: App Key di client (dilindungi Origin Check) atau menggunakan Proxy Server (keamanan maksimal).</p>
+
+  <!-- ── Pengantar ────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Dua pendekatan integrasi</h2>
+    <p class="desc">Pilih sesuai kebutuhan keamanan aplikasi Anda:</p>
+
+    <div class="arch">
+<span class="hi">Pendekatan A — App Key di client + Origin Check</span>  <span style="color:#fbbf24">(Contoh 1–3)</span>
+
+  Browser (https://aplikasi-saya.com)
+    │  POST sign-url.php
+    │  app_key: APP_KEY_...           <span class="dim"># terlihat di source, tapi...</span>
+    │  Origin:  https://aplikasi-saya.com  <span class="dim"># dikirim otomatis browser</span>
+    ▼
+  sign-url.php
+    ├─ Origin cocok dengan allowed_origins? → ✔ buat token
+    ├─ Rate limit belum habis?              → ✔ lanjut
+    └─ Domain lain / limit habis           → 403 / 429 ✖
+
+<span class="hi">Pendekatan B — Proxy Server</span>  <span style="color:#fbbf24">(Contoh 4)</span>
+
+  Browser  →  POST /api/minta-token (server Anda)  <span class="dim"># tanpa app key</span>
+               ↓  App Key di .env, tidak pernah ke browser
+               POST sign-url.php  →  token  →  Browser
+    </div>
+
+    <div class="alert alert-green">
+      ✅ <strong>Pendekatan A</strong> aman untuk kebanyakan kasus (SaaS, web app publik) — browser memblokir request dari domain yang tidak terdaftar.<br/>
+      ✅ <strong>Pendekatan B</strong> untuk keamanan penuh — App Key tidak bisa disalahgunakan meski seseorang meng-copy source code halaman.
+    </div>
+  </div>
+
+
+  <!-- ── Contoh 1: Auto-bind form ───────────────────────────── -->
+  <div class="card">
+    <h2>Contoh 1 — Form HTML (auto-bind) <span class="tag-prod">Origin Check</span></h2>
+    <p class="desc">
+      App Key boleh ada di HTML. Server membatasi penggunaan hanya dari domain yang
+      terdaftar di <code>allowed_origins</code> — domain lain akan mendapat <code>403</code>.
+      Tambahkan <code>data-app-key</code> dan arahkan <code>data-sign-url</code> langsung ke
+      <code>sign-url.php</code>.
+    </p>
+
+    <pre class="snippet">&lt;!-- Di config.php, daftarkan domain Anda di allowed_origins --&gt;
+
+&lt;form
+  data-uploader
+  data-sign-url=<span style="color:#86efac">"https://uploader.example.com/public/sign-url.php"</span>
+  data-app-key=<span style="color:#86efac">"APP_KEY_CONTOH_1"</span>  <span style="color:#7dd3fc">&lt;!-- terlindungi origin check --&gt;</span>
+  data-folder=<span style="color:#86efac">"files/invoice"</span>
+  data-filename-prefix=<span style="color:#86efac">"inv"</span>
+&gt;
+  &lt;input type="file" name="file" /&gt;
+  &lt;button type="submit"&gt;Upload&lt;/button&gt;
+&lt;/form&gt;
+
+&lt;script src="uploader.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  Uploader.bindForms();
+  document.querySelector('form[data-uploader]')
+    .addEventListener(<span style="color:#86efac">'uploader:success'</span>, (e) =&gt; {
+      console.log(<span style="color:#86efac">'Berhasil:'</span>, e.detail.file);
+    });
+&lt;/script&gt;</pre>
+
+    <hr/>
+    <p class="desc" style="margin-bottom:.75rem">
+      Demo langsung (request same-origin, Origin check aktif di server):
+    </p>
+
+    <form 
+        id="form1" 
+        data-uploader 
+        data-sign-url="sign-url.php" 
+        data-app-key="APP_KEY_CONTOH_1" 
+        data-filename-prefix="demo">
+      <div class="form-group">
+        <label>Pilih File</label>
+        <input type="file" name="file" id="fileForm1" />
+      </div>
+      <div class="actions">
+        <button class="btn-green" type="submit">⬆ Upload</button>
+        <span class="status" id="stat1"></span>
+      </div>
+      <progress id="bar1" value="0" max="100" hidden></progress>
+    </form>
+    <div class="log" id="log1">Belum ada aktivitas.</div>
+  </div>
+
+
+  <!-- ── Contoh 2: JS API ───────────────────────────────────── -->
+  <div class="card">
+    <h2>Contoh 2 — JavaScript API <span class="tag-prod">Origin Check</span></h2>
+    <p class="desc">
+      Kontrol penuh via JS. App Key disertakan langsung — server memvalidasi
+      bahwa request berasal dari domain yang terdaftar.
+    </p>
+
+    <pre class="snippet">const uploader = new Uploader({
+  signUrl: <span style="color:#86efac">'https://uploader.example.com/public/sign-url.php'</span>,
+  appKey:  <span style="color:#86efac">'APP_KEY_CONTOH_1'</span>,  <span style="color:#7dd3fc">// dilindungi origin check</span>
+  filenamePrefix: <span style="color:#86efac">'laporan'</span>,
+});
+
+await uploader.upload(file, {
+  onSign:     (data) =&gt; console.log(<span style="color:#86efac">'Token:'</span>, data.token),
+  onProgress: (pct)  =&gt; progressBar.value = pct,
+  onSuccess:  (data) =&gt; alert(<span style="color:#86efac">'Berhasil: '</span> + data.file),
+  onError:    (msg)  =&gt; alert(<span style="color:#86efac">'Error: '</span> + msg),
+});</pre>
+
+    <hr/>
+    <div class="form-group">
+      <label>Pilih File</label>
+      <input type="file" id="file2" />
+    </div>
+    <div class="actions">
+      <button class="btn-green" id="btnUpload2">⬆ Upload via JS API</button>
+      <span class="status" id="stat2"></span>
+    </div>
+    <progress id="bar2" value="0" max="100" hidden></progress>
+    <div class="log" id="log2">Belum ada aktivitas.</div>
+  </div>
+
+
+  <!-- ── Contoh 3: Hanya minta token ───────────────────────── -->
+  <div class="card">
+    <h2>Contoh 3 — Hanya Minta Token <span class="tag-prod">Origin Check</span></h2>
+    <p class="desc">
+      Ambil token lebih awal (mis. saat user memilih file), lalu upload di langkah terpisah.
+      Berguna untuk alur drag-and-drop, preview sebelum upload, atau multi-step form.
+    </p>
+
+    <pre class="snippet">const uploader = new Uploader({
+  signUrl: <span style="color:#86efac">'https://uploader.example.com/public/sign-url.php'</span>,
+  appKey:  <span style="color:#86efac">'APP_KEY_CONTOH_1'</span>,
+});
+
+const signData = await uploader.requestToken();
+<span style="color:#7dd3fc">// signData.token      — kirim ini saat upload</span>
+<span style="color:#7dd3fc">// signData.upload_url — URL upload.php</span>
+<span style="color:#7dd3fc">// signData.config     — konfigurasi aktif (folder, max_size, dll.)</span></pre>
+
+    <div class="actions">
+      <button class="btn-slate" id="btnSign3">⚡ Minta Token</button>
+    </div>
+    <div class="log" id="log3">Belum ada aktivitas.</div>
+  </div>
+
+
+  <!-- ── Contoh 4: Via Proxy ───────────────────────────────── -->
+  <div class="card">
+    <h2>Contoh 4 — Via Proxy Server <span class="tag-prod">Keamanan Maksimal</span></h2>
+    <p class="desc">
+      App Key <strong>tidak ada</strong> di client sama sekali. Proxy di server aplikasi Anda
+      yang memegang App Key dan meneruskan permintaan token ke uploader server.
+      Gunakan ini jika Anda membutuhkan lapisan otorisasi tambahan (cek login, CSRF, dll.)
+      atau ingin App Key benar-benar tersembunyi. SDK PHP tersedia di <code>sdk/UploaderSDK.php</code>.
+    </p>
+
+    <pre class="snippet"><span style="color:#7dd3fc">// Di server aplikasi Anda (PHP, Laravel, CI, dst.)</span>
+<span style="color:#7dd3fc">// require 'UploaderSDK.php';</span>
+<span style="color:#7dd3fc">// $sdk = new UploaderSDK(getenv('UPLOADER_SIGN_URL'), getenv('UPLOADER_APP_KEY'));</span>
+<span style="color:#7dd3fc">// echo json_encode(UploaderSDK::publicPayload($sdk->requestToken()));</span>
+
+<span style="color:#7dd3fc">// Di client — tanpa app key</span>
+const uploader = new Uploader({
+  signUrl: <span style="color:#86efac">'/api/minta-token'</span>,  <span style="color:#7dd3fc">// proxy endpoint di server Anda</span>
+});
+await uploader.upload(file, { onSuccess: (d) =&gt; console.log(d.file) });</pre>
+
+    <hr/>
+    <p class="desc" style="margin-bottom:.75rem">
+      Demo menggunakan <code>example-proxy.php</code> (App Key di sisi server PHP, tidak di browser):
+    </p>
+    <div class="form-group">
+      <label>Pilih File</label>
+      <input type="file" id="file4" />
+    </div>
+    <div class="actions">
+      <button class="btn-slate" id="btnUpload4">⬆ Upload via Proxy</button>
+      <span class="status" id="stat4"></span>
+    </div>
+    <progress id="bar4" value="0" max="100" hidden></progress>
+    <div class="log" id="log4">Belum ada aktivitas.</div>
+  </div>
+
+</div>
+
+<script src="uploader.js"></script>
+<script>
+
+  // ── Helpers ──────────────────────────────────────────────────
+  function appendLog(logEl, msg, cls = '') {
+    if (logEl.textContent.trim() === 'Belum ada aktivitas.') logEl.textContent = '';
+    const span = document.createElement('span');
+    span.className = cls;
+    span.textContent = msg + '\n';
+    logEl.appendChild(span);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+
+  // ── Contoh 1: Auto-bind ──────────────────────────────────────
+  Uploader.bindForms();
+
+  const form1 = document.getElementById('form1');
+  const log1  = document.getElementById('log1');
+  form1.addEventListener('uploader:sign',     ()  => { document.getElementById('stat1').textContent = 'Token OK, mengupload…'; appendLog(log1, '→ Token didapat.', 'info'); });
+  form1.addEventListener('uploader:progress', (e) => { document.getElementById('bar1').hidden = false; document.getElementById('bar1').value = e.detail.percent; document.getElementById('stat1').textContent = `${e.detail.percent}%`; });
+  form1.addEventListener('uploader:success',  (e) => { document.getElementById('stat1').textContent = ''; document.getElementById('bar1').hidden = true; appendLog(log1, '✔ Berhasil: ' + e.detail.file + '\n' + JSON.stringify(e.detail, null, 2), 'ok'); });
+  form1.addEventListener('uploader:error',    (e) => { document.getElementById('stat1').textContent = ''; appendLog(log1, '✖ ' + e.detail.message, 'err'); });
+
+
+  // ── Contoh 2: JS API ─────────────────────────────────────────
+  const uploader2 = new Uploader({ signUrl: 'sign-url.php', appKey: 'APP_KEY_CONTOH_1', filenamePrefix: 'jsapi' });
+  const log2 = document.getElementById('log2');
+
+  document.getElementById('btnUpload2').addEventListener('click', async () => {
+    const file = document.getElementById('file2').files[0];
+    if (!file) { alert('Pilih file dulu.'); return; }
+    const bar2 = document.getElementById('bar2'), stat2 = document.getElementById('stat2');
+    appendLog(log2, `→ Upload: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`, 'info');
+    try {
+      await uploader2.upload(file, {
+        onSign:     ()    => { stat2.textContent = 'Token OK…'; appendLog(log2, '→ Token didapat.', 'info'); },
+        onProgress: (pct) => { bar2.hidden = false; bar2.value = pct; stat2.textContent = `${pct}%`; },
+        onSuccess:  (d)   => { stat2.textContent = ''; bar2.hidden = true; appendLog(log2, '✔ Berhasil: ' + d.file + '\n' + JSON.stringify(d, null, 2), 'ok'); },
+        onError:    (msg) => { stat2.textContent = ''; appendLog(log2, '✖ ' + msg, 'err'); },
+      });
+    } catch (_) {}
+  });
+
+
+  // ── Contoh 3: Hanya minta token ──────────────────────────────
+  const uploader3 = new Uploader({ signUrl: 'sign-url.php', appKey: 'APP_KEY_CONTOH_1' });
+  const log3 = document.getElementById('log3');
+
+  document.getElementById('btnSign3').addEventListener('click', async () => {
+    appendLog(log3, '→ Meminta token…', 'info');
+    try {
+      const data = await uploader3.requestToken();
+      appendLog(log3, '✔ Token didapat:\n' + JSON.stringify(data, null, 2), 'ok');
+    } catch (e) {
+      appendLog(log3, '✖ ' + e.message, 'err');
+    }
+  });
+
+
+  // ── Contoh 4: Via Proxy ──────────────────────────────────────
+  const uploader4 = new Uploader({ signUrl: 'example-proxy.php' }); // tanpa appKey
+  const log4 = document.getElementById('log4');
+
+  document.getElementById('btnUpload4').addEventListener('click', async () => {
+    const file = document.getElementById('file4').files[0];
+    if (!file) { alert('Pilih file dulu.'); return; }
+    const bar4 = document.getElementById('bar4'), stat4 = document.getElementById('stat4');
+    appendLog(log4, `→ Upload via proxy: ${file.name}`, 'info');
+    try {
+      await uploader4.upload(file, {
+        onSign:     ()    => { stat4.textContent = 'Token OK…'; appendLog(log4, '→ Token didapat dari proxy.', 'info'); },
+        onProgress: (pct) => { bar4.hidden = false; bar4.value = pct; stat4.textContent = `${pct}%`; },
+        onSuccess:  (d)   => { stat4.textContent = ''; bar4.hidden = true; appendLog(log4, '✔ Berhasil: ' + d.file + '\n' + JSON.stringify(d, null, 2), 'ok'); },
+        onError:    (msg) => { stat4.textContent = ''; appendLog(log4, '✖ ' + msg, 'err'); },
+      });
+    } catch (_) {}
+  });
+
+</script>
+</body>
+</html>
