@@ -107,12 +107,9 @@ if (
 // 4. Tentukan konfigurasi token (dengan override opsional)
 // ------------------------------------------------------------------
 
-$requestedFolder = isset($_POST['folder']) ? rtrim($_POST['folder'], '/') : null;
-if ($requestedFolder) {
-    $folder = $requestedFolder;
-} else {
-    $folder = $appConfig['upload_dir'];
-}
+// Pastikan folder yang diminta tidak keluar dari batas upload_dir app key
+$requestedFolder = isset($_POST['folder']) ? trim($_POST['folder'], '/') : '';
+$folder = rtrim($appConfig['upload_dir'], '/') . '/' . $requestedFolder;
 
 // Max size: tidak boleh melebihi batas app key
 $maxSize = isset($_POST['max_size']) ? (int) $_POST['max_size'] : $appConfig['max_size'];
