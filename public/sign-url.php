@@ -109,7 +109,7 @@ if (
 
 // Folder: pastikan masih di dalam upload_dir yang diizinkan app key
 $requestedFolder = isset($_POST['folder']) ? trim($_POST['folder'], '/') : null;
-if ($requestedFolder && str_starts_with($requestedFolder . '/', $appConfig['upload_dir'] . '/')) {
+if ($requestedFolder && strpos($requestedFolder . '/', $appConfig['upload_dir'] . '/') === 0) {
     $folder = $requestedFolder;
 } elseif ($requestedFolder && $requestedFolder === $appConfig['upload_dir']) {
     $folder = $requestedFolder;
