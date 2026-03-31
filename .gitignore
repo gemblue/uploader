@@ -1,1 +1,3 @@
 files
+config.php
+storage/used_tokens.json
