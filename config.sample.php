@@ -34,10 +34,10 @@ return [
             'name'            => 'Aplikasi Pertama',
             'allowed_types'   => ['pdf', 'jpg', 'jpeg', 'png'],
             'max_size'        => 10 * 1024 * 1024, // 10 MB
-            'upload_dir'      => '/var/www/html/test',
+            'upload_dir'      => 'files/test',
             
             // Ganti dengan domain produksi Anda, misal: ['https://aplikasi-saya.com']
-            'allowed_origins' => ['https://uploader.test'], // null = izinkan semua (untuk development)
+            'allowed_origins' => null, // null = izinkan semua (untuk development)
             'rate_limit'      => ['max_requests' => 20, 'window' => 60],
         ],
 

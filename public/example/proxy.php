@@ -16,7 +16,7 @@
  *   Browser ← { token, upload_url, expires_at, config }
  */
 
-require_once __DIR__ . '/../sdk/UploaderSDK.php';
+require_once __DIR__ . '/../../sdk/UploaderSDK.php';
 
 header('Content-Type: application/json');
 

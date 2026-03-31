@@ -148,19 +148,23 @@ class Uploader {
    *
    * Atribut yang didukung:
    *   data-sign-url          (wajib)
-   *   data-app-key           (wajib)
+   *   data-app-key           (opsional, lihat catatan keamanan)
    *   data-folder
    *   data-allowed-types
    *   data-max-size
    *   data-filename-prefix
    *   data-filename-suffix
-   *   data-file-input        selector input file (default: input[type=file])
+   *
+   * Multiple file didukung:
+   *   - Satu <input type="file" multiple> → semua file yang dipilih diupload
+   *   - Beberapa <input type="file"> → semua file dari semua input diupload
+   *   File diupload satu per satu (token baru diminta untuk setiap file).
    *
    * Event yang di-dispatch ke form element:
-   *   uploader:sign     - token berhasil didapat   (event.detail = signData)
-   *   uploader:progress - sedang upload            (event.detail = { percent })
-   *   uploader:success  - upload berhasil          (event.detail = responseData)
-   *   uploader:error    - terjadi error            (event.detail = { message })
+   *   uploader:sign     - token berhasil didapat  (detail: signData + fileIndex, fileName)
+   *   uploader:progress - sedang upload           (detail: { percent, fileIndex, fileName })
+   *   uploader:success  - upload berhasil         (detail: responseData + fileIndex, fileName, totalFiles)
+   *   uploader:error    - terjadi error           (detail: { message, fileIndex, fileName })
    */
   static bindForms(root = document) {
     root.querySelectorAll('form[data-uploader]').forEach((form) => {
@@ -170,45 +174,53 @@ class Uploader {
       const d = form.dataset;
 
       const uploader = new Uploader({
-        signUrl:         d.signUrl,
-        appKey:          d.appKey,
-        folder:          d.folder          || undefined,
-        allowedTypes:    d.allowedTypes    || undefined,
-        maxSize:         d.maxSize         ? Number(d.maxSize) : undefined,
-        filenamePrefix:  d.filenamePrefix  || undefined,
-        filenameSuffix:  d.filenameSuffix  || undefined,
+        signUrl:        d.signUrl,
+        appKey:         d.appKey         || undefined,
+        folder:         d.folder         || undefined,
+        allowedTypes:   d.allowedTypes   || undefined,
+        maxSize:        d.maxSize        ? Number(d.maxSize) : undefined,
+        filenamePrefix: d.filenamePrefix || undefined,
+        filenameSuffix: d.filenameSuffix || undefined,
       });
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        const selector = d.fileInput || 'input[type="file"]';
-        const input    = form.querySelector(selector);
-        if (!input || !input.files.length) {
+        // Kumpulkan semua file dari semua input[type=file] dalam form
+        const files = [];
+        form.querySelectorAll('input[type="file"]').forEach((input) => {
+          Array.from(input.files).forEach((file) => files.push(file));
+        });
+
+        if (!files.length) {
           form.dispatchEvent(new CustomEvent('uploader:error', {
             bubbles: true,
-            detail: { message: 'Tidak ada file yang dipilih.' },
+            detail: { message: 'Tidak ada file yang dipilih.', fileIndex: null, fileName: null },
           }));
           return;
         }
 
-        try {
-          await uploader.upload(input.files[0], {
-            onSign: (signData) => form.dispatchEvent(new CustomEvent('uploader:sign', {
-              bubbles: true, detail: signData,
-            })),
-            onProgress: (percent) => form.dispatchEvent(new CustomEvent('uploader:progress', {
-              bubbles: true, detail: { percent },
-            })),
-            onSuccess: (data) => form.dispatchEvent(new CustomEvent('uploader:success', {
-              bubbles: true, detail: data,
-            })),
-            onError: (message, detail) => form.dispatchEvent(new CustomEvent('uploader:error', {
-              bubbles: true, detail: { message, detail },
-            })),
-          });
-        } catch (_) {
-          // error sudah di-dispatch via onError
+        // Upload satu per satu — token baru diminta untuk setiap file
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          try {
+            await uploader.upload(file, {
+              onSign: (signData) => form.dispatchEvent(new CustomEvent('uploader:sign', {
+                bubbles: true, detail: { ...signData, fileIndex: i, fileName: file.name },
+              })),
+              onProgress: (percent) => form.dispatchEvent(new CustomEvent('uploader:progress', {
+                bubbles: true, detail: { percent, fileIndex: i, fileName: file.name },
+              })),
+              onSuccess: (data) => form.dispatchEvent(new CustomEvent('uploader:success', {
+                bubbles: true, detail: { ...data, fileIndex: i, fileName: file.name, totalFiles: files.length },
+              })),
+              onError: (message, detail) => form.dispatchEvent(new CustomEvent('uploader:error', {
+                bubbles: true, detail: { message, detail, fileIndex: i, fileName: file.name },
+              })),
+            });
+          } catch (_) {
+            // error sudah di-dispatch via onError, lanjut ke file berikutnya
+          }
         }
       });
     });

@@ -9,18 +9,20 @@ Sistem upload file berbasis PHP yang aman dengan mekanisme **signed token one-ti
 ```
 uploader/
 ├── config.php              # Konfigurasi utama (app keys, secret, dll.)
+├── config.sample.php       # Template konfigurasi — salin ke config.php
 ├── helper.php              # Fungsi pembantu (token, response, whitelist, dll.)
-├── public/
-│   ├── index.php                  # Halaman simulasi upload (UI tester)
+├── public
 │   ├── sign-url.php               # Endpoint: minta signed token
 │   ├── upload.php                 # Endpoint: upload file menggunakan token
 │   ├── uploader.js                # Plugin JS untuk integrasi ke sistem lain
-│   ├── example-integration.html  # Contoh penggunaan uploader.js
-│   └── example-proxy.php         # Contoh proxy endpoint (template integrasi)
+│   └── example/
+│       ├── index.html             # Contoh & simulasi penggunaan uploader.js
+│       ├── proxy.php              # Contoh proxy endpoint (template integrasi)
+│       └── test.php               # Skrip pengujian manual
 ├── sdk/
 │   └── UploaderSDK.php            # PHP SDK — salin ke server aplikasi Anda
 ├── storage/
-│   ├── .htaccess           # Deny from all (blokir akses publik)
+│   ├── rate_limits/        # File rate-limit per IP+appKey (auto-dibuat)
 │   └── used_tokens.json    # Whitelist token aktif (one-time-use)
 └── files/
     ├── temp/               # Direktori sementara selama proses upload
@@ -52,16 +54,14 @@ cp -r uploader/ /var/www/html/uploader
 ### 2. Buat direktori yang diperlukan dan atur permission
 
 ```bash
-mkdir -p files/temp files/umum files/dokumen files/penilaian storage
-chmod 775 files/temp files/umum files/dokumen files/penilaian
-chmod 775 storage
+mkdir -p files/temp files/test storage/rate_limits
+chmod 775 files/temp files/test
+chmod 775 storage storage/rate_limits
 echo '{}' > storage/used_tokens.json
 chmod 664 storage/used_tokens.json
 ```
 
 ### 3. Proteksi direktori `storage/`
-
-Untuk Apache, file `storage/.htaccess` sudah dibuat otomatis dengan isi `Deny from all`.
 
 Untuk Nginx, tambahkan ke konfigurasi server:
 
@@ -72,7 +72,19 @@ location /storage {
 }
 ```
 
+Untuk Apache, tambahkan ke konfigurasi atau buat `storage/.htaccess`:
+
+```apache
+Deny from all
+```
+
 ### 4. Edit `config.php`
+
+Salin template terlebih dahulu:
+
+```bash
+cp config.sample.php config.php
+```
 
 ```php
 return [
@@ -92,7 +104,14 @@ return [
             'name'          => 'Nama Aplikasi Saya',
             'allowed_types' => ['pdf', 'jpg', 'jpeg', 'png'],
             'max_size'      => 10 * 1024 * 1024, // 10 MB
-            'upload_dir'    => 'files/umum',
+            'upload_dir'    => 'files/test',
+
+            // null atau ['*'] = izinkan semua (development/server-to-server)
+            // Produksi: daftarkan domain, mis. ['https://aplikasi-saya.com']
+            'allowed_origins' => null,
+
+            // Rate limit: maks token yang boleh diminta per IP per window (detik)
+            'rate_limit' => ['max_requests' => 20, 'window' => 60],
         ],
 
         // tambahkan app key lain sesuai kebutuhan ...
@@ -105,28 +124,30 @@ return [
 ### 5. (Opsional) Uji dengan PHP built-in server
 
 ```bash
-cd /path/to/uploader
+cd /path/to/uploader/public
 php -S localhost:8000
 ```
 
-Buka `http://localhost:8000/public/index.php` di browser.
+Buka `http://localhost:8000/example/index.html` atau `http://localhost:8000/example/test.php` di browser untuk mencoba simulasi dan contoh implementasi.
 
 ---
 
 ## Konfigurasi per App Key
 
-| Parameter       | Tipe     | Keterangan                                    |
-|-----------------|----------|-----------------------------------------------|
-| `name`          | string   | Nama deskriptif (untuk identifikasi/logging)  |
-| `allowed_types` | string[] | Ekstensi file yang diizinkan, huruf kecil     |
-| `max_size`      | int      | Batas ukuran file dalam bytes                 |
-| `upload_dir`    | string   | Path direktori tujuan akhir penyimpanan file  |
+| Parameter         | Tipe     | Keterangan                                                          |
+|-------------------|----------|---------------------------------------------------------------------|
+| `name`            | string   | Nama deskriptif (untuk identifikasi/logging)                        |
+| `allowed_types`   | string[] | Ekstensi file yang diizinkan, huruf kecil                           |
+| `max_size`        | int      | Batas ukuran file dalam bytes                                       |
+| `upload_dir`      | string   | Path direktori tujuan akhir penyimpanan file                        |
+| `allowed_origins` | array\|null | Domain yang boleh menggunakan app key ini. `null`/`['*']` = semua. Request tanpa `Origin` (cURL, SDK) selalu diizinkan. |
+| `rate_limit`      | array    | `max_requests` — maks token per IP; `window` — jendela waktu (detik) |
 
 ---
 
 ## API Reference
 
-### `POST /public/sign-url.php` — Minta Token Upload
+### `POST /sign-url.php` — Minta Token Upload
 
 Autentikasi via **salah satu** cara berikut:
 - Header HTTP: `X-App-Key: <app_key>`
@@ -162,7 +183,7 @@ Bagian yang kosong diabaikan. Contoh:
 {
   "status": "success",
   "token": "<signed_token>",
-  "upload_url": "https://example.com/public/upload.php",
+  "upload_url": "https://example.com/upload.php",
   "expires_at": "2026-03-31T12:05:00+07:00",
   "config": {
     "allowed_types": ["pdf"],
@@ -180,13 +201,14 @@ Bagian yang kosong diabaikan. Contoh:
 | HTTP | Kondisi                                   |
 |------|-------------------------------------------|
 | 401  | App key tidak disertakan                  |
-| 403  | App key tidak valid                       |
+| 403  | App key tidak valid / origin tidak diizinkan |
 | 405  | Method bukan POST                         |
 | 422  | Override `allowed_types` tidak valid      |
+| 429  | Rate limit terlampaui                     |
 
 ---
 
-### `POST /public/upload.php` — Upload File
+### `POST /upload.php` — Upload File
 
 Gunakan `upload_url` dan `token` yang diterima dari `sign-url.php`.
 
@@ -232,7 +254,7 @@ Gunakan `upload_url` dan `token` yang diterima dari `sign-url.php`.
 
 ```bash
 # Step 1: Minta token
-curl -s -X POST https://example.com/public/sign-url.php \
+curl -s -X POST https://example.com/sign-url.php \
   -F "app_key=KUNCI_APLIKASI_SAYA" \
   -F "allowed_types=pdf" \
   -F "filename_prefix=invoice" | python3 -m json.tool
@@ -242,7 +264,7 @@ curl -s -X POST https://example.com/public/sign-url.php \
 # Step 2: Upload file menggunakan token yang diterima
 TOKEN="<token dari step 1>"
 
-curl -s -X POST https://example.com/public/upload.php \
+curl -s -X POST https://example.com/upload.php \
   -F "token=$TOKEN" \
   -F "file=@/path/ke/dokumen.pdf" | python3 -m json.tool
 ```
@@ -251,7 +273,7 @@ curl -s -X POST https://example.com/public/upload.php \
 
 ```js
 // Step 1: Minta token
-const signRes = await fetch('https://example.com/public/sign-url.php', {
+const signRes = await fetch('https://example.com/sign-url.php', {
   method: 'POST',
   body: Object.assign(new FormData(), {
     app_key:         'KUNCI_APLIKASI_SAYA',
@@ -346,40 +368,44 @@ Format `storage/used_tokens.json` — hanya berisi token **aktif yang belum digu
 
 ## Integrasi ke Sistem Lain — `uploader.js`
 
-File `public/uploader.js` adalah plugin JavaScript yang bisa di-include di halaman manapun untuk menyederhanakan proses sign URL → upload.
+File `uploader.js` adalah plugin JavaScript yang bisa di-include di halaman manapun untuk menyederhanakan proses sign URL → upload.
 
 ### Cara include
 
 ```html
-<script src="https://uploader.example.com/public/uploader.js"></script>
+<script src="https://uploader.example.com/uploader.js"></script>
 ```
 
 ---
 
 ### Cara 1 — Auto-bind via atribut HTML (termudah)
 
-Tambahkan atribut `data-uploader` beserta konfigurasi pada tag `<form>`:
+Tambahkan atribut `data-uploader` beserta konfigurasi pada tag `<form>`. Semua `input[type=file]` di dalam form dikumpulkan dan diupload satu per satu secara otomatis.
 
 ```html
 <form
   data-uploader
-  data-sign-url="https://uploader.example.com/public/sign-url.php"
+  data-sign-url="https://uploader.example.com/sign-url.php"
   data-app-key="APP_KEY_CONTOH_1"
   data-folder="files/invoice"
   data-filename-prefix="inv"
 >
-  <input type="file" name="file" />
+  <!-- Satu input dengan multiple, atau beberapa input berbeda -->
+  <input type="file" name="file" multiple />
   <button type="submit">Upload</button>
 </form>
 
-<script src="https://uploader.example.com/public/uploader.js"></script>
+<script src="https://uploader.example.com/uploader.js"></script>
 <script>
   Uploader.bindForms();
 
   const form = document.querySelector('form[data-uploader]');
-  form.addEventListener('uploader:success', (e) => alert('Berhasil: ' + e.detail.file));
-  form.addEventListener('uploader:error',   (e) => alert('Gagal: ' + e.detail.message));
-  form.addEventListener('uploader:progress',(e) => console.log(e.detail.percent + '%'));
+  form.addEventListener('uploader:success', (e) => {
+    const { file, fileIndex, totalFiles } = e.detail;
+    console.log(`File ${fileIndex + 1}/${totalFiles} berhasil: ${file}`);
+  });
+  form.addEventListener('uploader:error',    (e) => alert('Gagal: ' + e.detail.message));
+  form.addEventListener('uploader:progress', (e) => console.log(`[${e.detail.fileIndex + 1}] ${e.detail.percent}%`));
 </script>
 ```
 
@@ -394,16 +420,15 @@ Tambahkan atribut `data-uploader` beserta konfigurasi pada tag `<form>`:
 | `data-max-size`       |       | Override max size (bytes)                   |
 | `data-filename-prefix`|       | Prefix nama file                            |
 | `data-filename-suffix`|       | Suffix nama file                            |
-| `data-file-input`     |       | CSS selector input file (default: `input[type=file]`) |
 
 #### Event yang di-dispatch ke form
 
-| Event                | `event.detail`                          |
-|----------------------|-----------------------------------------|
-| `uploader:sign`      | Data token (`token`, `upload_url`, dll) |
-| `uploader:progress`  | `{ percent: 0–100 }`                    |
-| `uploader:success`   | Response JSON dari upload               |
-| `uploader:error`     | `{ message, detail }`                   |
+| Event                | `event.detail`                                                     |
+|----------------------|--------------------------------------------------------------------|
+| `uploader:sign`      | Data token + `fileIndex`, `fileName`                               |
+| `uploader:progress`  | `{ percent, fileIndex, fileName }`                                 |
+| `uploader:success`   | Response JSON upload + `fileIndex`, `fileName`, `totalFiles`       |
+| `uploader:error`     | `{ message, detail, fileIndex, fileName }`                         |
 
 ---
 
@@ -411,7 +436,7 @@ Tambahkan atribut `data-uploader` beserta konfigurasi pada tag `<form>`:
 
 ```js
 const uploader = new Uploader({
-  signUrl:        'https://uploader.example.com/public/sign-url.php',
+  signUrl:        'https://uploader.example.com/sign-url.php',
   appKey:         'APP_KEY_CONTOH_1',
   filenamePrefix: 'laporan',
 });
@@ -458,4 +483,167 @@ const signData = await uploader.requestToken();
 
 ---
 
-Contoh HTML lengkap tersedia di `public/example-integration.html`.
+### Cara 4 — Via Proxy Server (keamanan maksimal)
+
+Pada Cara 1–3, App Key disertakan di sisi client. Meskipun dilindungi origin check, App Key tetap terlihat di source code halaman. Pendekatan proxy menyembunyikan App Key sepenuhnya — browser tidak pernah melihatnya.
+
+**Alur:**
+```
+Browser  →  POST /api/request-token  (server aplikasi Anda)
+                  ↓  App Key tersimpan di .env / config server
+             POST sign-url.php  →  token
+                  ↓
+Browser  ←  { token, upload_url, expires_at, config }
+```
+
+**Keuntungan tambahan:** proxy bisa menambahkan lapisan otorisasi sendiri (cek login, CSRF, validasi folder) sebelum meneruskan permintaan ke uploader server.
+
+#### Sisi server — buat proxy endpoint
+
+Salin `sdk/UploaderSDK.php` ke proyek Anda, lalu buat endpoint proxy:
+
+```php
+<?php
+// /api/request-token.php — endpoint di server aplikasi Anda
+
+require_once 'UploaderSDK.php';
+
+// 1. Otorisasi request (sesuaikan dengan sistem Anda)
+session_start();
+if (empty($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['status' => 'error', 'message' => 'Belum login.']);
+    exit;
+}
+
+// 2. Inisialisasi SDK — App Key dari .env, TIDAK hardcode
+$sdk = new UploaderSDK(
+    signUrl: getenv('UPLOADER_SIGN_URL'),
+    appKey:  getenv('UPLOADER_APP_KEY'),
+    defaults: [
+        'folder'          => 'files/umum',
+        'filename_prefix' => 'upload',
+    ],
+);
+
+// 3. (Opsional) Izinkan client memilih folder dari daftar yang disetujui
+$options = [];
+$allowedFolders = ['files/umum', 'files/invoice', 'files/laporan'];
+if (!empty($_POST['folder']) && in_array($_POST['folder'], $allowedFolders, true)) {
+    $options['folder'] = $_POST['folder'];
+}
+
+// 4. Minta token ke uploader server, kirim kembali ke browser
+try {
+    $tokenData = $sdk->requestToken($options);
+    header('Content-Type: application/json');
+    echo json_encode(UploaderSDK::publicPayload($tokenData)); // App Key tidak ikut
+} catch (UploaderSDKException $e) {
+    http_response_code(502);
+    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+}
+```
+
+`UploaderSDK::publicPayload()` memfilter response sehingga hanya `token`, `upload_url`, `expires_at`, dan `config` yang dikembalikan ke browser — App Key tidak ikut.
+
+#### Sisi client — tanpa App Key
+
+```html
+<script src="https://uploader.example.com/uploader.js"></script>
+<script>
+  const uploader = new Uploader({
+    signUrl: '/api/request-token',  // proxy di server Anda, tanpa appKey
+  });
+
+  const file = document.getElementById('fileInput').files[0];
+  await uploader.upload(file, {
+    onSuccess: (d) => console.log('Berhasil:', d.file),
+    onError:   (msg) => console.error(msg),
+  });
+</script>
+```
+
+Atau via auto-bind form (hapus `data-app-key`):
+
+```html
+<form data-uploader data-sign-url="/api/request-token">
+  <input type="file" name="file" />
+  <button type="submit">Upload</button>
+</form>
+```
+
+Template lengkap proxy endpoint tersedia di `public/example/proxy.php`.
+
+---
+
+## PHP SDK — `UploaderSDK.php`
+
+File `sdk/UploaderSDK.php` adalah PHP client untuk berkomunikasi dengan uploader server dari sisi server. Digunakan untuk membangun proxy endpoint seperti pada Cara 4 di atas.
+
+**Instalasi:** Salin `sdk/UploaderSDK.php` ke proyek Anda, lalu `require_once`.
+
+### Constructor
+
+```php
+$sdk = new UploaderSDK(
+    signUrl:  'https://uploader.example.com/public/sign-url.php',
+    appKey:   getenv('UPLOADER_APP_KEY'),
+    defaults: [                     // opsional — nilai default tiap request
+        'folder'          => 'files/umum',
+        'filename_prefix' => 'upload',
+    ],
+    timeout:  10,                   // opsional — timeout HTTP (detik)
+);
+```
+
+### `requestToken(array $options = [])`
+
+Meminta signed token ke uploader server. `$options` meng-override `defaults` yang ditentukan di constructor.
+
+```php
+$tokenData = $sdk->requestToken([
+    'folder'          => 'files/invoice',
+    'allowed_types'   => 'pdf,jpg',
+    'max_size'        => 5 * 1024 * 1024,
+    'filename_prefix' => 'inv',
+    'filename_suffix' => 'draft',
+]);
+// $tokenData['token']      — signed token
+// $tokenData['upload_url'] — URL upload.php
+// $tokenData['expires_at'] — waktu kedaluarsa (ISO 8601)
+// $tokenData['config']     — konfigurasi aktif
+```
+
+Melempar `UploaderSDKException` jika request gagal atau uploader server merespons error.
+
+### `UploaderSDK::publicPayload(array $tokenData)`
+
+Method statis — memfilter array response sehingga hanya field yang aman dikembalikan ke browser (tanpa App Key atau data internal).
+
+```php
+echo json_encode(UploaderSDK::publicPayload($tokenData));
+```
+
+---
+
+Contoh HTML lengkap tersedia di `public/example/index.html`.
+
+---
+
+## Lisensi
+
+MIT License
+
+Copyright (c) 2026
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+## Atribusi
+
+Pembuatan kode pada proyek ini dibantu oleh **GitHub Copilot** menggunakan model **Claude Sonnet 4.6**.

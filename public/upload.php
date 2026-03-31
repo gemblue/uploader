@@ -146,11 +146,11 @@ if (!is_dir($tempDir)) {
 $prefix = $payload['filename_prefix'] ?? '';
 $suffix = $payload['filename_suffix'] ?? '';
 
-$rand1    = generateRandomString(6);
-$rand2    = generateRandomString(6);
+$rand1    = generateRandomString(4);
+$rand2    = generateRandomString(4);
 $datetime = date('ymdHis');
 
-$parts_name = array_filter([$prefix, $rand1, $datetime, $rand2, $suffix]);
+$parts_name = array_filter([$prefix, $rand1.$datetime.$rand2, $suffix]);
 $baseName   = implode('_', $parts_name);
 $tempName = $baseName . '.' . $ext;
 $tempPath = $tempDir . '/' . $tempName;
