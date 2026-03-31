@@ -107,11 +107,8 @@ if (
 // 4. Tentukan konfigurasi token (dengan override opsional)
 // ------------------------------------------------------------------
 
-// Folder: pastikan masih di dalam upload_dir yang diizinkan app key
-$requestedFolder = isset($_POST['folder']) ? trim($_POST['folder'], '/') : null;
-if ($requestedFolder && strpos($requestedFolder . '/', $appConfig['upload_dir'] . '/') === 0) {
-    $folder = $requestedFolder;
-} elseif ($requestedFolder && $requestedFolder === $appConfig['upload_dir']) {
+$requestedFolder = isset($_POST['folder']) ? rtrim($_POST['folder'], '/') : null;
+if ($requestedFolder) {
     $folder = $requestedFolder;
 } else {
     $folder = $appConfig['upload_dir'];
